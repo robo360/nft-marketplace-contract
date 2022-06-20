@@ -9,16 +9,15 @@ module.exports = {
      network_id: "*",
     },
     testnet: {
-      provider: () => new HDWalletProvider(process.env.MNEMONIC, "https://rinkeby.infura.io/v3/" + process.env.INFURA_PID),
+      provider: () => new HDWalletProvider(process.env.PRIVATE_KEY, "https://rinkeby.infura.io/v3/" + process.env.INFURA_PID),
       network_id: 4,
       confirmations: 1,
       timeoutBlocks: 10,
-      skipDryRun: true,
       production: false,
       gasPrice: 2000000000 // 2 gwei
     },
     mainnet: {
-      provider: () => new HDWalletProvider(process.env.MNEMONIC, "https://mainnet.infura.io/v3/" + process.env.INFURA_PID),
+      provider: () => new HDWalletProvider(process.env.PRIVATE_KEY, "https://mainnet.infura.io/v3/" + process.env.INFURA_PID),
       network_id: 1,
       confirmations: 3,
       timeoutBlocks: 30,
