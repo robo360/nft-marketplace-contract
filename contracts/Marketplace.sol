@@ -1,34 +1,6 @@
 // SPDX-License-Identifier: MIT
 //
-// Marketplace from the Art101 team (https://art101.io/devs.html).
-// Developed by @lza_menace
-//
-// This is our take on a decentralized NFT marketplace. Big thanks to those
-// who came before us; CryptoPunks, CryptoPhunks, etc. Their marketplaces and
-// tools were highly influential and provided the initial contract code and
-// reference implementations.
-//
-// This implementation supports many collections/contracts to be added to it.
-// The only requirements are that the contract implements `Ownable` and ERC-721
-// or ERC-1155 token standards. Contract owners must submit their collection.
-// This contract is free to use, but contract owners can enforce their own royalties.
-//
-// Teams may use this contract with an integrated frontend of their choice or
-// fork this code and launch one of their own. We hope it becomes useful to the
-// NFT and web3 scene and furthers the push for decentralization. Much of the
-// infrastructure has been consolidated to the largest players/organizations
-// which have normalized censorship, favoritism, wash trading, skimming/capital
-// extraction, and supporting and enabling scams and predatory behavior. We
-// believe in the need for NFT projects and teams to leverage their own
-// (or community) smart contract based exchange methods and open source trading
-// contracts.
-//
-// A frontend implementation can be found at https://gallery.art101.io. We
-// intend to release a more general purpose template which teams can fork for
-// their own projects.
-//
-// If anyone is so inclined and interested, please join us:
-// @art101nft - @j_winter_m - @cartyisme - @lza_menace
+//Based on Marketplace from the Art101 team (https://art101.io/devs.html).
 
 pragma solidity ^0.8.0;
 
@@ -98,9 +70,9 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 tokenIndex
     ) {
         if (collectionState[contractAddress].erc1155) {
-            require(IERC1155(contractAddress).balanceOf(msg.sender, tokenIndex) > 0, "You must own the token.");
+            require(IERC1155(contractAddress).balanceOf(tx.origin, tokenIndex) > 0, "You must own the token.");
         } else {
-            require(msg.sender == IERC721(contractAddress).ownerOf(tokenIndex), "You must own the token.");
+            require(tx.origin == IERC721(contractAddress).ownerOf(tokenIndex), "You must own the token.");
         }
         _;
     }
@@ -110,17 +82,35 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 tokenIndex
     ) {
         if (collectionState[contractAddress].erc1155) {
-            require(IERC1155(contractAddress).balanceOf(msg.sender, tokenIndex) == 0, "Token owner cannot enter bid to self.");
+            require(IERC1155(contractAddress).balanceOf(tx.origin, tokenIndex) == 0, "Token owner cannot enter bid to self.");
         } else {
-            require(msg.sender != IERC721(contractAddress).ownerOf(tokenIndex), "Token owner cannot enter bid to self.");
+            require(tx.origin != IERC721(contractAddress).ownerOf(tokenIndex), "Token owner cannot enter bid to self.");
         }
         _;
+    }
+
+    function toAsciiString(address x) public pure returns (string memory) {
+        bytes memory s = new bytes(40);
+        for (uint i = 0; i < 20; i++) {
+            bytes1 b = bytes1(uint8(uint(uint160(x)) / (2**(8*(19 - i)))));
+            bytes1 hi = bytes1(uint8(b) / 16);
+            bytes1 lo = bytes1(uint8(b) - 16 * uint8(hi));
+            s[2*i] = char(hi);
+            s[2*i+1] = char(lo);            
+        }
+        return string(abi.encodePacked("0x",s));
+    }
+
+    function char(bytes1 b) public pure returns (bytes1 c) {
+
+        if (uint8(b) < 10) return bytes1(uint8(b) + 0x30);
+        else return bytes1(uint8(b) + 0x57);
     }
 
     modifier onlyIfContractOwner(
         address contractAddress
     ) {
-        require(msg.sender == Ownable(contractAddress).owner(), "You must own the contract.");
+        require(tx.origin == Ownable(contractAddress).owner(), string.concat(toAsciiString(tx.origin), toAsciiString(Ownable(contractAddress).owner())));
         _;
     }
 
@@ -167,11 +157,11 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 minSalePriceInWei
     ) external collectionMustBeEnabled(contractAddress) onlyIfTokenOwner(contractAddress, tokenIndex) nonReentrant() {
         if (collectionState[contractAddress].erc1155) {
-            require(IERC1155(contractAddress).isApprovedForAll(msg.sender, address(this)), "Marketplace not approved to spend token on seller behalf.");
+            require(IERC1155(contractAddress).isApprovedForAll(tx.origin, address(this)), "Marketplace not approved to spend token on seller behalf.");
         } else {
             require(IERC721(contractAddress).getApproved(tokenIndex) == address(this), "Marketplace not approved to spend token on seller behalf.");
         }
-        tokenOffers[contractAddress][tokenIndex] = Offer(true, tokenIndex, msg.sender, minSalePriceInWei, address(0x0));
+        tokenOffers[contractAddress][tokenIndex] = Offer(true, tokenIndex, tx.origin, minSalePriceInWei, address(0x0));
         emit TokenOffered(contractAddress, tokenIndex, minSalePriceInWei, address(0x0));
     }
 
@@ -183,11 +173,11 @@ contract Marketplace is ReentrancyGuard, Ownable {
         address toAddress
     ) external collectionMustBeEnabled(contractAddress) onlyIfTokenOwner(contractAddress, tokenIndex) nonReentrant() {
         if (collectionState[contractAddress].erc1155) {
-            require(IERC1155(contractAddress).isApprovedForAll(msg.sender, address(this)), "Marketplace not approved to spend token on seller behalf.");
+            require(IERC1155(contractAddress).isApprovedForAll(tx.origin, address(this)), "Marketplace not approved to spend token on seller behalf.");
         } else {
             require(IERC721(contractAddress).getApproved(tokenIndex) == address(this), "Marketplace not approved to spend token on seller behalf.");
         }
-        tokenOffers[contractAddress][tokenIndex] = Offer(true, tokenIndex, msg.sender, minSalePriceInWei, toAddress);
+        tokenOffers[contractAddress][tokenIndex] = Offer(true, tokenIndex, tx.origin, minSalePriceInWei, toAddress);
         emit TokenOffered(contractAddress, tokenIndex, minSalePriceInWei, toAddress);
     }
 
@@ -196,7 +186,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         address contractAddress,
         uint256 tokenIndex
     ) public collectionMustBeEnabled(contractAddress) onlyIfTokenOwner(contractAddress, tokenIndex) nonReentrant() {
-        tokenOffers[contractAddress][tokenIndex] = Offer(false, tokenIndex, msg.sender, 0, address(0x0));
+        tokenOffers[contractAddress][tokenIndex] = Offer(false, tokenIndex, tx.origin, 0, address(0x0));
         emit TokenNoLongerForSale(contractAddress, tokenIndex);
     }
 
@@ -214,8 +204,8 @@ contract Marketplace is ReentrancyGuard, Ownable {
         require(msg.value > existing.value, "Must bid higher than current bid.");
         // Refund the failing bid
         pendingBalance[existing.bidder] = pendingBalance[existing.bidder].add(existing.value);
-        tokenBids[contractAddress][tokenIndex] = Bid(true, tokenIndex, msg.sender, msg.value);
-        emit TokenBidEntered(contractAddress, tokenIndex, msg.value, msg.sender);
+        tokenBids[contractAddress][tokenIndex] = Bid(true, tokenIndex, tx.origin, msg.value);
+        emit TokenBidEntered(contractAddress, tokenIndex, msg.value, tx.origin);
     }
 
     // Remove an open bid on a token
@@ -224,12 +214,12 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 tokenIndex
     ) external payable collectionMustBeEnabled(contractAddress) notIfTokenOwner(contractAddress, tokenIndex) nonReentrant() {
         Bid memory bid = tokenBids[contractAddress][tokenIndex];
-        require(msg.sender == bid.bidder, "Only original bidder can withdraw this bid.");
-        emit TokenBidWithdrawn(contractAddress, tokenIndex, bid.value, msg.sender);
+        require(tx.origin == bid.bidder, "Only original bidder can withdraw this bid.");
+        emit TokenBidWithdrawn(contractAddress, tokenIndex, bid.value, tx.origin);
         uint256 amount = bid.value;
         tokenBids[contractAddress][tokenIndex] = Bid(false, tokenIndex, address(0x0), 0);
         // Refund the bid money
-        payable(msg.sender).transfer(amount);
+        payable(tx.origin).transfer(amount);
     }
 
     /*************************
@@ -243,7 +233,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
     ) external payable collectionMustBeEnabled(contractAddress) notIfTokenOwner(contractAddress, tokenIndex) nonReentrant() {
         Offer memory offer = tokenOffers[contractAddress][tokenIndex];
         address seller = offer.seller;
-        address buyer = msg.sender;
+        address buyer = tx.origin;
         uint256 amount = msg.value;
 
         // Checks
@@ -292,7 +282,7 @@ contract Marketplace is ReentrancyGuard, Ownable {
         uint256 minPrice
     ) external payable collectionMustBeEnabled(contractAddress) onlyIfTokenOwner(contractAddress, tokenIndex) nonReentrant() {
         Bid memory bid = tokenBids[contractAddress][tokenIndex];
-        address seller = msg.sender;
+        address seller = tx.origin;
         address buyer = bid.bidder;
         uint256 amount = bid.value;
 
@@ -332,11 +322,11 @@ contract Marketplace is ReentrancyGuard, Ownable {
     **************************/
 
     function withdraw() external nonReentrant() {
-        uint256 amount = pendingBalance[msg.sender];
+        uint256 amount = pendingBalance[tx.origin];
         // Zero the pending refund before
         // sending to prevent re-entrancy attacks
-        pendingBalance[msg.sender] = 0;
-        payable(msg.sender).transfer(amount);
+        pendingBalance[tx.origin] = 0;
+        payable(tx.origin).transfer(amount);
     }
 
     /*************************
